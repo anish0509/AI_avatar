@@ -1,0 +1,32 @@
+# Caddy reverse proxy for the avatar backend. This really is the whole config.
+#
+# SITE_ADDRESS is supplied by docker-compose.prod.yml:
+#   unset            -> ":80"                 plain HTTP on localhost, for the
+#                                             local dress rehearsal
+#   api.example.com  -> automatic HTTPS       Caddy obtains and renews a
+#                                             Let's Encrypt certificate on its
+#                                             own, no certbot, no cron job
+#
+# TLS is not a nice-to-have for this app: a browser on an HTTPS page is
+# forbidden from opening a plaintext ws:// connection (mixed content), so the
+# avatar simply cannot work cross-origin without a real certificate.
+#
+# Two things Caddy does here that nginx would need explicit config for:
+#
+#   1. WebSocket upgrades are proxied automatically. /ws/avatar, /ws/voice and
+#      /ws/transcribe need no special handling at all.
+#
+#   2. There is NO default proxy read timeout. This matters specifically for
+#      this app: /ws/avatar deliberately holds a connection open and IDLE for
+#      up to IDLE_RELEASE_TIMEOUT_S (120s) between questions so it can reuse
+#      the warmed-up HeyGen session -- see app/api/avatar_routes.py. nginx's
+#      default proxy_read_timeout of 60s would silently drop those live
+#      sessions and present as a phantom "the backend keeps disconnecting"
+#      bug. If this is ever ported to nginx, `proxy_read_timeout 3600s` plus
+#      the Upgrade/Connection headers are mandatory, not optional.
+#
+# `api` resolves via Docker's internal DNS to the api service. That service
+# publishes no host ports, so this proxy is the only route to it.
+{$SITE_ADDRESS} {
+	reverse_proxy api:8000
+}

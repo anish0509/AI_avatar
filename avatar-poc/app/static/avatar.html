@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HeyGen Avatar Test</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .app { max-width: 560px; }
+    #avatarVideo {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: 10px;
+      border: 1px solid #262a35;
+    }
+    .latency {
+      width: 100%;
+      font-size: 12px;
+      color: #8b92a5;
+      letter-spacing: 0.02em;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <video id="avatarVideo" autoplay playsinline></video>
+    <p id="status" class="status status--idle">Idle — press Ask to start an avatar session</p>
+    <p id="answerSource" class="answer-source" hidden></p>
+    <p id="latency" class="latency"></p>
+    <div class="transcript-header">
+      <span>Transcript</span>
+      <button id="clearBtn" type="button">Clear</button>
+    </div>
+    <div id="transcript" class="transcript" aria-live="polite"></div>
+    <form id="promptForm" class="prompt-form">
+      <input id="promptInput" type="text" placeholder="Ask the avatar something…" aria-label="Question" autocomplete="off" required />
+      <button id="askBtn" type="submit">Ask</button>
+      <button id="stopBtn" type="button" hidden>Stop</button>
+    </form>
+  </main>
+  <script type="module" src="/static/avatar.js"></script>
+</body>
+</html>

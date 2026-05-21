@@ -1,0 +1,32 @@
+# Secrets -- never commit real credentials
+.env
+
+# Self-signed TLS certs for local/LAN HTTPS dev (private key -- never commit)
+certs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+.venv/
+
+# Scratch / generated output (e.g. connectivity-check .wav files)
+tmp/
+
+# Ingestion pipeline: input PDFs and generated Markdown/metadata are local
+# working data, not source -- keep the folders (READMEs) but not their contents.
+data/input/*
+!data/input/README.md
+data/output/*
+!data/output/README.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

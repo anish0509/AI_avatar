@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Avatar Voice POC</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="app">
+    <canvas id="orbCanvas" width="240" height="240"></canvas>
+    <p id="status" class="status status--idle">Idle</p>
+    <p id="answerSource" class="answer-source" hidden></p>
+    <div class="transcript-header">
+      <span>Transcript</span>
+      <button id="clearBtn" type="button">Clear</button>
+    </div>
+    <div id="transcript" class="transcript" aria-live="polite"></div>
+    <form id="promptForm" class="prompt-form">
+      <input id="promptInput" type="text" placeholder="Ask the avatar something…" aria-label="Prompt" autocomplete="off" required />
+      <button id="micBtn" type="button" title="Speak" aria-label="Speak">🎤</button>
+      <button id="askBtn" type="submit">Ask</button>
+      <button id="stopBtn" type="button" hidden>Stop</button>
+    </form>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

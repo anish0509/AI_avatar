@@ -42,7 +42,7 @@ from dataclasses import dataclass
 
 import logfire
 from langsmith import traceable
-from openai import AsyncOpenAI
+from app.core.openai_client import get_openai_client
 
 from app.core.config import settings
 from app.core.logger import get_logger
@@ -51,8 +51,6 @@ from app.services.retrieval import RetrievedChunk, search
 
 logger = get_logger(__name__)
 
-_client = AsyncOpenAI(api_key=settings.openai_api_key)
-logfire.instrument_openai(_client)
 
 ABSTAIN_MESSAGE = "I don't have enough information in the knowledge base to answer that."
 
@@ -165,7 +163,7 @@ async def stream_grounded_answer(
     with logfire.span("Grounded LLM synthesis", chunk_count=len(context.chunks)):
         grounded_prompt = build_grounded_prompt(prompt, context.chunks, history)
 
-        stream = await _client.chat.completions.create(
+        stream = await get_openai_client().chat.completions.create(
             model=settings.llm_model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},

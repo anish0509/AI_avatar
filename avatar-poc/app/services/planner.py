@@ -22,13 +22,11 @@ from dataclasses import dataclass
 
 import logfire
 from langsmith import traceable
-from openai import AsyncOpenAI
+from app.core.openai_client import get_openai_client
 
 from app.core.config import settings
 from app.services.conversation_memory import Message
 
-_client = AsyncOpenAI(api_key=settings.openai_api_key)
-logfire.instrument_openai(_client)
 
 CONVERSATIONAL = "CONVERSATIONAL"
 
@@ -97,7 +95,7 @@ def parse_planner_output(raw: str) -> PlannerDecision:
 async def plan(history: list[Message], message: str) -> PlannerDecision:
     with logfire.span("Planner decision", message=message[:200]):
         prompt = build_planner_prompt(history, message)
-        response = await _client.chat.completions.create(
+        response = await get_openai_client().chat.completions.create(
             model=settings.planner_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,

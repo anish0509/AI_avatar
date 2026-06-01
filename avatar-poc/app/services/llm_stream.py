@@ -16,19 +16,17 @@ from collections.abc import AsyncIterator
 
 import logfire
 from langsmith import traceable
-from openai import AsyncOpenAI
+from app.core.openai_client import get_openai_client
 
 from app.core.config import settings
 
-_client = AsyncOpenAI(api_key=settings.openai_api_key)
-logfire.instrument_openai(_client)
 
 
 @traceable(name="stream_llm_response", run_type="llm")
 async def stream_llm_response(prompt: str) -> AsyncIterator[str]:
     """Yield text pieces (deltas) as the LLM generates its response to `prompt`."""
     with logfire.span("LLM response (no retrieval)", prompt=prompt[:200]):
-        stream = await _client.chat.completions.create(
+        stream = await get_openai_client().chat.completions.create(
             model=settings.llm_model,
             messages=[{"role": "user", "content": prompt}],
             stream=True,

@@ -4,7 +4,6 @@ instead of duplicating it (see Day 6 in day-wise-implementation.md for the
 bug this originally fixed)."""
 
 import asyncio
-import contextlib
 
 
 async def wait_and_cancel_rest(tasks: tuple[asyncio.Task, ...], return_when: str) -> None:
@@ -20,9 +19,7 @@ async def wait_and_cancel_rest(tasks: tuple[asyncio.Task, ...], return_when: str
         for task in tasks:
             if not task.done():
                 task.cancel()
-        for task in tasks:
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     first_exc: BaseException | None = None
     for task in tasks:

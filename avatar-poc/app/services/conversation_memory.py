@@ -66,7 +66,7 @@ class InMemoryConversationStore(ConversationStore):
         self._threads: dict[str, list[Message]] = {}
 
     async def get_history(self, thread_id: str) -> list[Message]:
-        return list(self._threads.get(thread_id, []))
+        return [message.copy() for message in self._threads.get(thread_id, [])]
 
     async def append_message(self, thread_id: str, role: str, content: str) -> None:
         history = self._threads.setdefault(thread_id, [])

@@ -26,6 +26,7 @@ single-turn, as before).
 
 import asyncio
 import contextlib
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -222,9 +223,10 @@ async def _watch_for_disconnect(websocket: WebSocket) -> None:
     """Concurrently waits for the client to close the connection (e.g. the
     Stop button) so the pipeline can be cancelled immediately, instead of
     only being noticed the next time the server tries to send a message."""
-    message = await websocket.receive()
-    if message["type"] == "websocket.disconnect":
-        raise WebSocketDisconnect(code=message.get("code", 1000))
+    while True:
+        message = await websocket.receive()
+        if message["type"] == "websocket.disconnect":
+            raise WebSocketDisconnect(code=message.get("code", 1000))
 
 
 async def _run_pipeline(
@@ -250,7 +252,13 @@ async def voice_ws(websocket: WebSocket) -> None:
         logger.info("client disconnected before sending a prompt", extra=log_extra)
         return
 
-    prompt = (payload.get("prompt", "") if isinstance(payload, dict) else "").strip()
+    except (json.JSONDecodeError, KeyError):
+        await _safe_send_error(websocket, 'expected {"prompt": "<text>"}')
+        await _safe_close(websocket)
+        return
+
+    raw_prompt = payload.get("prompt") if isinstance(payload, dict) else None
+    prompt = raw_prompt.strip() if isinstance(raw_prompt, str) else ""
     if not prompt:
         await _safe_send_error(websocket, 'expected {"prompt": "<text>"}')
         await _safe_close(websocket)

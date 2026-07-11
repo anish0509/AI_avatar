@@ -10,6 +10,7 @@ reconnecting for each one would add real per-sentence latency.
 """
 
 import base64
+import contextlib
 import json
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
@@ -60,34 +61,40 @@ class RealtimeApiSpeaker(TtsSpeaker):
         # sits directly on the critical path, in front of generation. Measured
         # at ~1.4s, previously visible only as an unexplained gap between the
         # retrieval and LLM spans in a Logfire trace.
-        with step_timer("realtime tts session setup", "realtime_tts") as timer:
-            self._ws = await websockets.connect(url, additional_headers=headers)
-            timer.mark("ws_connect")
+        try:
+            with step_timer("realtime tts session setup", "realtime_tts") as timer:
+                self._ws = await websockets.connect(url, additional_headers=headers)
+                timer.mark("ws_connect")
 
-            await self._ws.send(
-                json.dumps(
-                    {
-                        "type": "session.update",
-                        "session": {
-                            "type": "realtime",
-                            "model": self._model,
-                            "output_modalities": ["audio"],
-                            "instructions": VERBATIM_INSTRUCTIONS,
-                            "audio": {
-                                "output": {
-                                    "format": {"type": "audio/pcm", "rate": SAMPLE_RATE},
-                                    "voice": self._voice,
-                                }
+                await self._ws.send(
+                    json.dumps(
+                        {
+                            "type": "session.update",
+                            "session": {
+                                "type": "realtime",
+                                "model": self._model,
+                                "output_modalities": ["audio"],
+                                "instructions": VERBATIM_INSTRUCTIONS,
+                                "audio": {
+                                    "output": {
+                                        "format": {"type": "audio/pcm", "rate": SAMPLE_RATE},
+                                        "voice": self._voice,
+                                    }
+                                },
                             },
-                        },
-                    }
+                        }
+                    )
                 )
-            )
-            # Wait for confirmation before any speak() call sends text, so we
-            # never race the session configuration.
-            await self._wait_for_event("session.updated")
-            timer.mark("session_configure")
-            timer.log()
+                # Wait for confirmation before any speak() call sends text, so we
+                # never race the session configuration.
+                await self._wait_for_event("session.updated")
+                timer.mark("session_configure")
+                timer.log()
+        except BaseException:
+            # __aexit__ is not called when __aenter__ fails or is cancelled.
+            with contextlib.suppress(Exception):
+                await self.__aexit__()
+            raise
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:

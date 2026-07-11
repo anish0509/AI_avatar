@@ -17,6 +17,7 @@ transcript events, consumed via events().
 """
 
 import base64
+import contextlib
 import json
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
@@ -115,21 +116,27 @@ class RealtimeApiTranscriber(StreamingTranscriber):
         # Timed for the same reason as the TTS socket: a new connection per
         # recording, on the path between pressing the mic button and the first
         # transcript delta appearing.
-        with step_timer("realtime stt session setup", "realtime_stt") as timer:
-            self._ws = await websockets.connect(url, additional_headers=headers)
-            timer.mark("ws_connect")
+        try:
+            with step_timer("realtime stt session setup", "realtime_stt") as timer:
+                self._ws = await websockets.connect(url, additional_headers=headers)
+                timer.mark("ws_connect")
 
-            await self._ws.send(json.dumps(build_session_update(self._model)))
-            # Wait for confirmation before any send_audio() call streams bytes,
-            # so we never race the session configuration (same discipline as
-            # RealtimeApiSpeaker.__aenter__). Note: despite the session object
-            # itself being typed "transcription", the confirmation event name
-            # is still the generic "session.updated" (verified against the
-            # real API -- NOT "transcription_session.updated"); an initial
-            # "session.created" arrives first and is skipped by this loop.
-            await self._wait_for_event("session.updated")
-            timer.mark("session_configure")
-            timer.log()
+                await self._ws.send(json.dumps(build_session_update(self._model)))
+                # Wait for confirmation before any send_audio() call streams bytes,
+                # so we never race the session configuration (same discipline as
+                # RealtimeApiSpeaker.__aenter__). Note: despite the session object
+                # itself being typed "transcription", the confirmation event name
+                # is still the generic "session.updated" (verified against the
+                # real API -- NOT "transcription_session.updated"); an initial
+                # "session.created" arrives first and is skipped by this loop.
+                await self._wait_for_event("session.updated")
+                timer.mark("session_configure")
+                timer.log()
+        except BaseException:
+            # __aexit__ is not called when __aenter__ fails or is cancelled.
+            with contextlib.suppress(Exception):
+                await self.__aexit__()
+            raise
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:

@@ -1,22 +1,4 @@
-"""Drives HeyGen's LiveAvatar streaming avatar in LITE mode: pushes our own
-TTS audio (PCM16/24kHz mono) over a plain WebSocket so HeyGen lip-syncs video
-to it, rather than letting HeyGen synthesize speech itself (FULL mode, which
-would use its own TTS voice instead of ours). Mirrors the TtsSpeaker pattern
-in realtime_tts.py -- an AvatarRenderer interface plus one concrete
-implementation, so a different renderer/vendor is a one-file swap.
-
-One session is opened once (in __aenter__, via REST token+start then a
-WebSocket connect) and reused across multiple speak_audio() calls for a
-turn's sentences, not reconnected per sentence -- same reasoning as
-RealtimeApiSpeaker. speak_audio() takes an AsyncIterator[bytes] rather than
-text, which is what makes this voice-agnostic: it doesn't matter whether the
-audio came from RealtimeApiSpeaker or a future cloned-voice TTS backend.
-
-Incoming HeyGen events are drained by a single background task
-(_read_events_loop) for the life of the session, so speak_audio() only ever
-sends and returns -- it never waits on a response. See that method's
-docstring for the measured 91s-vs-17s regression that motivated it.
-"""
+"""Drive LiveAvatar lip sync with PCM16 audio. A background reader handles session events while audio is sent."""
 
 import asyncio
 import base64
@@ -159,14 +141,6 @@ class LiveAvatarRenderer(AvatarRenderer):
         if not settings.heygen_api_key:
             raise RuntimeError("HEYGEN_API_KEY is not set in .env")
 
-        # Timed per step because this stage runs CONCURRENTLY with answer
-        # generation (see avatar_routes.py). Concurrency means it leaves no gap
-        # in the trace to subtract, so unless it is measured HERE it cannot be
-        # recovered afterwards by any arithmetic -- attempting that once
-        # produced a confidently wrong number. See P17 in
-        # architecture-and-query-flow.md. The per-step split is what made it
-        # actionable: it showed the cost is HeyGen's REST API plus two TLS
-        # handshakes, and that the avatar itself is ready instantly.
         with step_timer("heygen session setup", "heygen_streaming") as timer:
             self._http = httpx.AsyncClient(
                 base_url=settings.heygen_api_base, timeout=settings.heygen_session_timeout_s
@@ -193,11 +167,6 @@ class LiveAvatarRenderer(AvatarRenderer):
             data = start_resp.json()["data"]
             timer.mark("start")
 
-            # ws_url is documented as "Custom Mode only" and typed optional --
-            # confirmed present for LITE mode via scripts/check_heygen_session.py
-            # before this code was written (see bug-report-streaming-stt.md Bug 1
-            # for why: an unverified assumption about event/field names hung a
-            # session indefinitely last time).
             ws_url = data.get("ws_url")
             if not ws_url:
                 raise RuntimeError(

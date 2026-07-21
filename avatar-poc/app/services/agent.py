@@ -1,41 +1,4 @@
-"""Step 5: the agent. Routes each turn via the planner (small-talk /
-history-answerable -> skip retrieval; otherwise -> rewritten search query),
-then answers either conversationally (from history alone) or with a
-retrieval-grounded response -- reusing retrieve_context/stream_grounded_answer
-from rag_stream.py directly, not duplicating retrieval or grounding logic.
-Per-thread conversation memory (conversation_memory.py) means follow-up
-questions that depend on earlier turns actually work.
-
-Built as lean async (no LangGraph) -- plain coroutines composed directly,
-keeping the exact `str -> AsyncIterator[str]` contract every other service
-in this codebase already uses. See the Decision Log discussion: LangGraph's
-core value (durable checkpointing, parallel fan-out) isn't needed by this
-3-step flow, while its cost is real -- a new framework dependency plus
-`get_stream_writer()`/custom-stream-mode, which Multimodal_RAG's own
-reference code flags as only working inside a running graph.
-
-Observability split (mirrors rag_stream.py's retrieve_context /
-stream_grounded_answer / stream_rag_response layering): plan_turn() runs the
-planner (and retrieval, if needed) and returns an AgentDecision BEFORE any
-answer text streams, so voice_routes.py can report the real decision (was
-it conversational? what did the planner rewrite the query to? was retrieval
-grounded?) in the "meta" event up front -- not just for the RAG path, the
-same rigor applies here. stream_agent_answer() then streams from that
-decision and persists the turn to memory once the answer is complete.
-stream_agent_response() is a one-call convenience wrapper (plan + stream)
-for the check scripts.
-
-Observability (Step 8): each layer gets its own named span/trace so a
-LangSmith/Logfire trace shows the whole turn's shape at a glance -- did it
-route conversational or to a lookup, then which generation path actually
-ran. Note: plan_turn() and stream_agent_answer() are called from
-voice_routes.py in SEPARATE asyncio tasks (producer/consumer), not one
-straight call chain -- Python's contextvars (which both Logfire's
-OpenTelemetry context and LangSmith's tracing context are built on) are
-copied into tasks created via asyncio.create_task, so nesting should carry
-across that boundary, but this hasn't been empirically confirmed end-to-end
-(OpenAI quota was down for the whole of this step -- see CLAUDE.md).
-"""
+"""Plan each turn, retrieve supporting content, and stream an answer with conversation history."""
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass

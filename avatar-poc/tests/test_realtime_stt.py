@@ -45,9 +45,6 @@ def _patched_connect(fake_ws: FakeWebSocket):
     return patch("app.services.realtime_stt.websockets.connect", AsyncMock(return_value=fake_ws))
 
 
-# Real API confirmed (see Day 9 notes): a "session.created" event arrives
-# BEFORE "session.updated" on a transcription-intent connection -- the
-# session-setup wait must skip it rather than treat it as the confirmation.
 SESSION_SETUP_EVENTS = [{"type": "session.created"}, {"type": "session.updated"}]
 
 
@@ -70,9 +67,6 @@ async def test_connect_sends_session_update_and_waits_for_confirmation():
     assert fake_ws.closed is True
 
 
-# --- Bug 4 mitigation knobs: session.update payload construction ----------
-# These assert the empty-> omit contract (defaults change nothing) and that
-# each knob lands in the right place when set. See bug-report-streaming-stt.md.
 
 
 def test_build_session_update_omits_all_knobs_by_default(monkeypatch):
@@ -114,8 +108,6 @@ def test_build_session_update_includes_knobs_when_set(monkeypatch):
 def test_noise_reduction_defaults_to_far_field():
     from app.core.config import Settings
 
-    # The adopted Bug-4 fix: far_field is the code default (Phase 2, 2026-07-13),
-    # so build_session_update emits it unless explicitly overridden to "".
     assert Settings.model_fields["realtime_noise_reduction"].default == "far_field"
 
 

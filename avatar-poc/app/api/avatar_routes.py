@@ -1,31 +1,4 @@
-"""HeyGen LiveAvatar route: one persistent WebSocket per browser tab that
-answers however many questions are asked over it, reusing the same HeyGen
-session and TTS connection across them instead of rebuilding both per turn.
-
-Previously (through 2026-07-27) this was one WebSocket PER QUESTION: HeyGen
-session setup (~4.4s, measured) and the TTS socket (~2.3s, measured) were both
-paid on every single Ask, even though nothing about either one is specific to
-one question. Reused here: `/ws/avatar` now stays open across turns, building
-the `LiveAvatarRenderer` and `RealtimeApiSpeaker` once and holding them in
-`AvatarConnectionState` for as long as the connection lives. HeyGen setup is
-still started concurrently with answer generation (see `_start_session_setup`)
-exactly as before -- that concurrency is unaffected, it just now only has to
-happen once per connection instead of once per question.
-
-This requires `HEYGEN_IS_SANDBOX=false`: a sandbox session is hard-capped at
-60 seconds (from creation, not from first speech), which makes reuse across
-more than one turn structurally impossible there. Production billing is 1
-credit/min, and now runs for as long as the connection is open -- including
-idle time between questions, not just while the avatar is speaking. See
-`IDLE_RELEASE_TIMEOUT_S` below for how that's bounded.
-
-Because the browser can send another question at any time, ONE reader task
-(`_read_client_messages`) owns `websocket.receive()` for the connection's
-whole lifetime -- not just one turn, as it used to -- and dispatches parsed
-messages onto two queues that the turn-processing loop and the session-join
-handshake read from. Turns are processed strictly one at a time (no barge-in,
-same limitation as always); only the setup-and-idle bookkeeping is new.
-"""
+"""Coordinate answer generation, speech synthesis, and reusable LiveAvatar sessions."""
 
 import asyncio
 import contextlib
@@ -55,13 +28,6 @@ router = APIRouter()
 # (old cached avatar.js, blocked WebRTC) degrades instead of hanging.
 CLIENT_READY_TIMEOUT_S = 15.0
 
-# How long the HeyGen session + TTS socket are kept alive with no question in
-# flight before being released. Set to 2 minutes per explicit request (shorter
-# than the 5 minutes first suggested) because production billing is 1
-# credit/min and runs the whole time a session sits idle, not just while the
-# avatar speaks -- unlike a forgotten browser tab, an unbounded idle session
-# is an unbounded, silent cost. The next question after a release simply pays
-# the setup cost again and continues; nothing else about the connection ends.
 IDLE_RELEASE_TIMEOUT_S = 120.0
 
 

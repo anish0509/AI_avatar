@@ -1,13 +1,4 @@
-"""Speaks text aloud via OpenAI's Realtime API, behind a TtsSpeaker
-interface (mirrors the ASRProvider pattern from the ingestion project) so a
-different backend (e.g. gpt-4o-mini-tts) is a one-file swap if ever needed
--- see the Decision Log in implementation.md.
-
-One connection is opened once (in __aenter__) and reused across multiple
-speak() calls, sentence by sentence, rather than reconnecting per sentence
--- a single LLM reply is usually several sentences in a row, and
-reconnecting for each one would add real per-sentence latency.
-"""
+"""Stream PCM16 speech over a Realtime connection reused across sentences."""
 
 import base64
 import contextlib

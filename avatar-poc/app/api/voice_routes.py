@@ -1,28 +1,4 @@
-"""WebSocket route that orchestrates the full speak-in-real-time pipeline:
-answer streaming -> sentence chunking -> TTS speaking -> relay to the browser.
-
-A producer task drains the chosen answer stream through TextChunker and puts
-completed sentences on a queue; a consumer task pulls sentences off the
-queue, speaks each one via a TtsSpeaker, and relays text + audio to the
-browser as they arrive. Bridging them with an asyncio.Queue lets the answer
-keep streaming while a previous sentence is still being spoken.
-
-Answer source is chosen ONCE per turn from settings.answer_source and
-reported to the browser (a "meta" event) and the logs BEFORE any answer text
-streams, so it's always unambiguous whether a reply came from the agent
-(planner + retrieval + memory), single-turn RAG, or a direct LLM call -- and,
-when retrieval ran, what it actually decided (top score, grounded-or-not,
-which documents). Everything downstream of the producer (chunker -> TTS ->
-browser) is identical across all three sources.
-
-Thread continuity: each browser "Ask" opens a brand-new WebSocket (see
-app.js), so there is no transport-level continuity between turns on its
-own. The browser mints a thread_id once per page load and sends it with
-every prompt; the server echoes it back in "meta" so the browser can keep
-reusing it. Only the "agent" answer source actually consults
-conversation_memory by thread_id -- "gpt"/"rag" ignore it (stateless,
-single-turn, as before).
-"""
+"""Stream answers through sentence chunking and TTS to the browser. Agent turns use thread-based memory."""
 
 import asyncio
 import contextlib
@@ -56,29 +32,7 @@ StreamFactory = Callable[[], AsyncIterator[str]]
 
 @dataclass
 class TurnTiming:
-    """Server-side time-to-first-response for one turn. Shared by /ws/voice
-    and /ws/avatar (which imports it) so the two paths' latency is directly
-    comparable in Logfire rather than measured two different ways.
-
-    Measures the window a user actually waits on: from the prompt being
-    received to (a) the first text event and (b) the first audio byte
-    produced. This is deliberately NOT the same as the whole route span
-    duration -- that span also covers the avatar speaking the entire rest of
-    the reply, sentence by sentence, which the user is listening to, not
-    waiting on. See problem.md P0.1 (the real-time latency budget).
-
-    Two split points are recorded so the latency can be attributed:
-      - time-to-first-text  = planning/retrieval + LLM first sentence
-      - time-to-first-audio = the above + TTS synthesis of that sentence
-    The gap between them is the TTS contribution, which is exactly the kind
-    of per-stage number P0.1 says to budget against.
-
-    Both record_* methods are idempotent (only the FIRST text/audio of the
-    turn is timed) and return the measured milliseconds (or None if already
-    recorded) so the logic is unit-testable without inspecting log output.
-    Emitted via logfire.info (nests under the active "voice turn" span) AND
-    the structured JSON logger (always-on, no token needed).
-    """
+    """Record first-text and first-audio latency from receipt of a prompt. Each metric is emitted once per turn."""
 
     start: float
     log_extra: dict
@@ -270,11 +224,6 @@ async def voice_ws(websocket: WebSocket) -> None:
     thread_id = raw_thread_id.strip() if isinstance(raw_thread_id, str) and raw_thread_id.strip() else uuid.uuid4().hex
 
     logger.info("session started", extra={**log_extra, "thread_id": thread_id})
-    # Start the time-to-first-response clock the moment we have the user's
-    # prompt -- BEFORE planning/retrieval -- so the measured window includes
-    # every server-side step the user waits through (retrieval + planner +
-    # LLM first sentence + that sentence's TTS), not just the last hop. See
-    # problem.md P0.1 and the TurnTiming docstring.
     timing = TurnTiming(start=time.monotonic(), log_extra=log_extra)
     # Wraps the whole turn (planning through the producer/consumer pipeline)
     # in one named span, so a Logfire trace shows "everything that happened

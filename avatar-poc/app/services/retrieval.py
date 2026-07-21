@@ -1,26 +1,4 @@
-"""Retrieves relevant chunks for a query via Pinecone dense vector search.
-Queries the index Stage 3 built (app/ingestion/vector_store.py).
-
-Dense search only for now -- no reranking. Priority is proving the simplest
-possible grounded-QA path end to end (retrieve -> ground an LLM answer ->
-speak it); reranking and other retrieval-quality optimizations come after
-that path is verified working, not before.
-
-Observability (Step 8): @traceable(run_type="retriever") gives this its own
-typed span in the LangSmith UI (distinct from "llm"/"chain" spans); the
-logfire.span() records the query and how many chunks came back. Both no-op
-without their respective tokens configured.
-
-ASYNC WRAPPER (2026-07-28): the Pinecone SDK is synchronous, so calling it
-directly from async route code froze the whole event loop for the duration
-(measured 1.3s warm, 3.9s cold). That didn't just delay this call -- it
-stopped every other task from running, including the HeyGen session setup
-that avatar_routes.py deliberately starts EARLY so it can overlap retrieval.
-A trace showed HeyGen setup beginning 13ms after retrieval finished rather
-than alongside it: the concurrency was scheduled but never actually got to
-run. `asyncio.to_thread` moves the blocking call off the event loop so that
-overlap is real. See P18 in architecture-and-query-flow.md.
-"""
+"""Search Pinecone for relevant document chunks. Run its synchronous client outside the event loop."""
 
 from __future__ import annotations
 

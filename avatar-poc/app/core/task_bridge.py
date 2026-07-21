@@ -1,7 +1,4 @@
-"""Shared asyncio task-bridging helper, extracted from voice_routes.py so
-the new /ws/transcribe route can reuse the same cancellation-safety logic
-instead of duplicating it (see Day 6 in day-wise-implementation.md for the
-bug this originally fixed)."""
+"""Wait for concurrent tasks and cancel remaining work on completion or failure."""
 
 import asyncio
 

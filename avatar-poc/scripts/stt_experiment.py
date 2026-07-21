@@ -67,7 +67,6 @@ POST_FEED_WAIT_SECONDS = 1.0  # after audio, give VAD a moment to close the segm
 DRAIN_GRACE_SECONDS = 3.0  # once fed, wait this long for a (possibly phantom 2nd) segment
 FEED_EVENT_TIMEOUT_SECONDS = 15  # while still feeding, cap the wait for the first event
 
-# Captures that are NOT part of the Phase 1 short-utterance dataset.
 EXCLUDED_STEMS = {"check_speaker", "connectivity_check"}
 
 # The five knobs the harness overrides; anything not named in a config is reset
@@ -80,16 +79,6 @@ OVERRIDE_DEFAULTS: dict[str, object] = {
     "realtime_transcribe_prompt": "",
 }
 
-# Experiment matrix -- ONE parameter changed per entry (baseline changes none).
-# Order follows the Phase 2 plan.
-#
-# EMPIRICAL FINDING (2026-07-13, 8-clip x3 run): silence_duration_ms is a dead
-# end in BOTH directions. Raising it (700) leaves trailing noise inside the
-# segment (and once broke live streaming); LOWERING it (200) fragments one word
-# into MULTIPLE segments, each a new phantom opportunity -- sil_200 was the
-# WORST config (46% extra / 33% trailing). Leave silence_duration at default.
-# The real lever was noise_reduction=far_field (trailing 29%->8%, no accuracy
-# or latency cost); VAD threshold 0.65 also cut phantoms but hurt core accuracy.
 CONFIGS: dict[str, dict[str, object]] = {
     "baseline": {},
     "noise_far": {"realtime_noise_reduction": "far_field"},

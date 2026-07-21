@@ -1,12 +1,4 @@
-"""Transcribes recorded user speech to text via OpenAI's audio
-transcription API -- this is the speech-to-text side of voice input, turning
-a spoken prompt into the text that flows through the same LLM -> chunker ->
-TTS pipeline a typed prompt does. Server-side (not the browser's Web Speech
-API) for better Hindi/Hinglish accuracy and to keep the API key off the
-client. Verified manually against the real API; not hit by the automated
-test suite, same convention as llm_stream.py / the ASRProvider in the
-ingestion project for external paid APIs (mocked in tests, verified
-manually)."""
+"""Transcribe recorded audio with OpenAI."""
 
 from app.core.openai_client import get_openai_client
 

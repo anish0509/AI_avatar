@@ -1,10 +1,3 @@
-# ============================================================
-# CRITICAL: observability MUST be configured before any other app module is
-# imported, so Logfire spans from every module are captured from the start
-# -- a module that logs before configure() runs poisons Logfire silently
-# for the whole process (confirmed via Multimodal_RAG's own documented
-# gotcha, and reproduced empirically -- see app/core/observability.py).
-# ============================================================
 from app.core.observability import configure_observability
 
 configure_observability()

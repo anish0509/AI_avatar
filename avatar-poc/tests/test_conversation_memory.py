@@ -1,10 +1,4 @@
-"""Unit tests for app/services/conversation_memory.py's public facade. Runs
-against InMemoryConversationStore (the default backend) -- no Redis, no API
-calls. Mechanically converted to async in Phase 2 (2026-07-30): the public
-functions became `async def` so a Redis-backed store's I/O could be awaited
-without freezing the event loop (the same class of bug already found and
-fixed for Pinecone, P18) -- these tests' behavior is otherwise unchanged from
-before that change, proving the default backend's behavior didn't shift."""
+"""Exercise conversation history and backend selection without external services."""
 
 import pytest
 

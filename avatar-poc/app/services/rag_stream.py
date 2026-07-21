@@ -1,41 +1,4 @@
-"""Streams a grounded answer: retrieves relevant chunks for the prompt via
-app.services.retrieval, then streams an OpenAI chat completion answering
-from that context. Drop-in alternative to llm_stream.stream_llm_response
-(identical signature/contract: str in, AsyncIterator[str] out) -- toggled
-via settings.answer_source so voice_routes.py's existing chunker/TTS
-pipeline needs no changes at all, only which stream function it calls.
-
-Grounding gate: confirmed in practice that the system prompt ALONE does not
-reliably stop the LLM from answering well-known general questions (e.g.
-"what is sales") from its own pretrained knowledge, even when the retrieved
-context is irrelevant -- dense search always returns *something*, and
-gpt-4o-mini often answers from what it already knows rather than noticing
-the context doesn't actually address the question. is_grounded() adds a
-deterministic, pre-LLM check on the top chunk's similarity score
-(RETRIEVAL_SCORE_FLOOR) so off-topic queries abstain without ever reaching
-the LLM, instead of relying on the model to behave.
-
-Observability split: retrieve_context() does the search + gate decision and
-returns a RetrievalContext, so a caller (voice_routes.py) can report exactly
-what happened -- which path, the top score, whether it was grounded, which
-documents -- to the browser AND the logs before generation starts, rather
-than that decision being invisible inside a single opaque call.
-retrieve_context / stream_grounded_answer / stream_rag_response are layered
-so the check scripts still get a one-call `str -> AsyncIterator[str]` entry
-point while voice_routes gets the decision up front (with no double search).
-
-build_grounded_prompt() and is_grounded() are pure and unit tested; the
-not-grounded branch of stream_grounded_answer() is too (it makes no LLM
-call). The grounded LLM call is verified manually against the real API
-(scripts/check_rag_stream.py), same convention llm_stream.py uses for paid APIs.
-
-Observability (Step 8): logfire.instrument_openai() auto-traces every raw
-API call through this client; @traceable adds named, typed LangSmith spans
-("chain" for the orchestration functions) so a trace shows retrieval and
-generation as distinct, inspectable steps. The existing structured JSON
-logger.info() calls are kept as-is (always-on, no token needed) -- Logfire
-is layered on top as an additional, optional channel, not a replacement.
-"""
+"""Retrieve document context and stream grounded answers. Abstain below the similarity threshold."""
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass

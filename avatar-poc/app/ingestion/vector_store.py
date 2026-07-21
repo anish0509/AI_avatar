@@ -1,15 +1,4 @@
-"""Pinecone wrapper for Stage 3 (embed + upsert) of the ingestion pipeline,
-following Stage 2's chunking (app/ingestion/chunking.py).
-
-Uses Pinecone's INTEGRATED INFERENCE: chunk text goes in, Pinecone embeds it
-server-side with the configured hosted model (llama-text-embed-v2) -- no
-local embedding model, no torch, no separate embedding API call. Keeps the
-dependency footprint to just the `pinecone` SDK.
-
-Deliberately a SEPARATE index from ai-avatar-backend's ai-avatar-content --
-that index is reserved for the production sales-coaching knowledge base;
-this POC's general-document demo corpus stays clearly apart from it.
-"""
+"""Manage a Pinecone index with integrated embedding inference."""
 
 from __future__ import annotations
 

@@ -1,22 +1,4 @@
-"""Routes each agent turn: CONVERSATIONAL (small talk, or answerable from
-history alone -- skip retrieval) or a rewritten, self-contained search
-query (needs a knowledge-base lookup). Pattern adapted from Multimodal_RAG's
-planner node, rewritten domain-agnostic for this project's general-document
-corpus (their reference was hard-coded to Kubernetes/Intel), and for lean
-async instead of LangGraph -- a plain coroutine, not a graph node.
-
-build_planner_prompt() and parse_planner_output() are pure and unit tested.
-The actual LLM call is verified manually against the real API
-(scripts/check_planner.py), same convention every other paid-API service in
-this codebase follows.
-
-Observability (Step 8): the planner's routing decision is exactly the kind
-of thing worth tracing -- confirmed (Multimodal_RAG's own docs) that a
-misrouted planner (skipping retrieval when it shouldn't) is a real,
-observed failure mode, not hypothetical, so being able to see the routing
-decision per query in the LangSmith/Logfire dashboards matters here more
-than in most other functions.
-"""
+"""Classify conversational turns and resolve retrieval queries from conversation history."""
 
 from dataclasses import dataclass
 

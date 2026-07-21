@@ -1,39 +1,4 @@
-"""Per-thread conversation history for the agent (Step 5), backed by a
-swappable store (Phase 2, 2026-07-30).
-
-Public surface is unchanged in SHAPE but not in signature: `get_history` /
-`append_message` / `clear_thread` are the same three functions callers
-already use, now `async def`. That's a real, deliberate change, not a typo --
-Redis calls are I/O, and calling a blocking client from these functions
-without `await` would be the exact class of bug already found and fixed for
-Pinecone (asyncio.to_thread in retrieval.py, P18 in
-architecture-and-query-flow.md): a synchronous call silently freezing the
-event loop. Every caller (agent.py) is already inside an `async def`, so this
-is a mechanical `await` added at each call site, not a structural change.
-
-Two backends behind one `ConversationStore` interface, chosen by
-`settings.memory_backend` (mirrors the ABC + concrete-implementation pattern
-already used for `TtsSpeaker`/`AvatarRenderer`, with the lazy-singleton
-selection itself closer to `vector_store.py`'s `_get_client()`/`ensure_index()`
--- one client built once, reused for the process's lifetime, not a fresh
-instance per call):
-
-- InMemoryConversationStore: today's dict, wrapped. Default. What every
-  pre-existing test runs against -- restart/multi-worker limitations are
-  unchanged and still an accepted POC limitation, not a bug.
-- RedisConversationStore: a Redis LIST per thread (RPUSH/LTRIM/LRANGE), not a
-  JSON blob -- appending is push-then-trim, never read-modify-write, so there
-  is no lost-update race even under concurrent writers. TTL is reset on every
-  append (sliding expiry, verified against a real Redis container): an
-  actively-used conversation never expires mid-use, only a thread with no new
-  message for `settings.memory_ttl_seconds` (24h default) is deleted.
-
-Redis errors are NOT caught here and propagate to the caller. Deliberate,
-matching this project's established preference for loud failures over silent
-degradation (the whole finding in P18 was that a SILENT failure is the
-expensive kind) -- if Redis is unreachable, the turn fails visibly rather than
-quietly answering with no memory and no sign anything was wrong.
-"""
+"""Bounded conversation history with in-process and Redis stores. Redis failures propagate to callers."""
 
 from __future__ import annotations
 
@@ -79,10 +44,7 @@ class InMemoryConversationStore(ConversationStore):
 
 
 class RedisConversationStore(ConversationStore):
-    """Takes an already-constructed client (dependency injection) rather than
-    building its own from a URL internally -- lets tests pass a fake client
-    directly instead of monkeypatching module internals, same reasoning as
-    this project's other fakes (FakeHttpClient, FakeWebSocket)."""
+    """Store messages in Redis lists with atomic append, trim, and sliding expiry."""
 
     def __init__(self, redis_client) -> None:
         self._redis = redis_client

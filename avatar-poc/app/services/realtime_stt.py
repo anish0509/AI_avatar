@@ -1,20 +1,4 @@
-"""Transcribes user speech to text AS IT ARRIVES via OpenAI's Realtime API,
-behind a StreamingTranscriber interface (mirrors the TtsSpeaker pattern in
-realtime_tts.py, which itself mirrors the ingestion project's ASRProvider)
-so a different streaming backend (e.g. a local VOSK recognizer) is a
-one-file swap if ever needed.
-
-This is the streaming counterpart to transcription.py's transcribe_audio()
-(POST /transcribe, whole-clip-then-transcribe) -- that endpoint is left
-untouched as a non-streaming fallback. This module is consumed by the new
-WebSocket route (POST /ws/transcribe) so the browser can show text while
-the user is still speaking, instead of only after they stop.
-
-One connection is opened once (in __aenter__) and audio is streamed to it
-continuously via send_audio(); OpenAI's server-side VAD decides where
-utterance boundaries are and emits delta (partial) and completed (final)
-transcript events, consumed via events().
-"""
+"""Stream microphone audio to OpenAI and relay partial and final transcripts."""
 
 import base64
 import contextlib
@@ -43,14 +27,7 @@ class TranscriptEvent:
 
 
 def build_session_update(model: str) -> dict:
-    """Builds the transcription `session.update` payload from settings.
-
-    Kept as a module-level pure function (reads `settings`, no I/O) so the
-    Bug-4 mitigation knobs can be unit-tested without opening a websocket.
-    Every optional knob is OMITTED when empty/None, so the payload is
-    byte-for-byte the previous default (server_vad, API defaults) until a
-    value is explicitly configured -- see bug-report-streaming-stt.md.
-    """
+    """Build a transcription session payload, omitting unset optional fields."""
     transcription: dict = {"model": model}
     # Empty language -> omit the field and let the model auto-detect
     # (needed for Hindi/Hinglish); a set language biases decoding and

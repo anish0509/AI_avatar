@@ -1,55 +1,23 @@
-# What gets EXCLUDED from the image build context.
-#
-# The first entry is the security-critical one. .env holds live OpenAI,
-# Pinecone, LlamaCloud, Logfire, LangSmith and HeyGen keys, and anything
-# copied into an image stays readable in that layer FOREVER -- deleting it in
-# a later layer does not remove it, it only hides it from the final
-# filesystem. Secrets reach the container at runtime instead, via
-# `env_file: .env` in docker-compose.prod.yml.
 .env
 .env.*
 !.env.example
-
-# Virtualenv: Windows binaries that cannot run on the Linux base image, and
-# ~500MB of packages the Dockerfile reinstalls from requirements.txt anyway.
 .venv/
 venv/
-
-# Private TLS keys for local/LAN HTTPS dev. Caddy issues its own certificates
-# in production -- these must never leave this machine.
 certs/
-
-# Local working data. Ingestion runs on YOUR machine and pushes to Pinecone's
-# cloud index; the server queries Pinecone directly and never reads these, so
-# shipping the source PDFs and parsed Markdown would bloat the image for
-# nothing.
 data/
 tmp/
-
-# Test/eval caches and artifacts.
 .pytest_cache/
 .deepeval/
 tests/
-
-# Python bytecode -- regenerated inside the image, and .pyc files built on
-# Windows are not reused on Linux anyway.
 __pycache__/
 **/__pycache__/
 *.py[cod]
 *.egg-info/
-
-# Docs. Not needed at runtime and they change constantly, which would
-# needlessly invalidate the Docker build cache on every edit.
 *.md
-
-# Git and editor state.
 .git/
 .gitignore
 .vscode/
 .idea/
-
-# The build/deploy files themselves -- read by Docker from outside the build
-# context, never needed inside the image.
 Dockerfile
 .dockerignore
 docker-compose.yml

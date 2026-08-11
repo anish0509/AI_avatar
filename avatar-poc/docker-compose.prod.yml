@@ -1,72 +1,29 @@
-# Production stack: Caddy (TLS + reverse proxy) -> api (uvicorn) -> redis.
-#
-# Deliberately SEPARATE from docker-compose.yml rather than replacing it. The
-# dev file publishes redis on 6379 because uvicorn runs natively on the host
-# there and needs to reach it; here the api runs inside the network and reaches
-# redis by service name, so publishing that port would only expose an
-# unauthenticated Redis to the internet. The two files serve genuinely
-# different topologies -- don't merge them.
-#
-#   local dress rehearsal:  docker compose -f docker-compose.prod.yml up --build
-#   on the VPS:             SITE_ADDRESS=api.example.com docker compose -f docker-compose.prod.yml up -d --build
-
 services:
   api:
     build: .
-    # Reads avatar-poc/.env at RUN time and injects it as environment
-    # variables. This is not the same thing as the image containing .env --
-    # .dockerignore deliberately keeps the file OUT of the image (secrets in
-    # image layers stay readable even if a later layer deletes them). Secrets
-    # arrive at startup instead, which is what we want.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     env_file: .env
     environment:
-      # These three OVERRIDE whatever .env says (compose gives `environment:`
-      # precedence over `env_file:`), so the same .env keeps working for local
-      # host-based development without needing a second copy.
-      #
-      # REDIS_URL is the one that actually bites: it isn't in .env at all, so
-      # it would fall back to config.py's default of redis://localhost:6379/0
-      # -- and inside a container `localhost` is THIS container, not the redis
-      # service. Every question would fail loudly (Redis errors are
-      # deliberately uncaught; see conversation_memory.py's docstring).
       REDIS_URL: redis://redis:6379/0
-      # Required, not optional, because the api runs with --workers 2. Each
-      # worker is a separate process with separate memory, so the in-process
-      # dict backend would give each one its own conversation history and
-      # follow-up questions would resolve against whichever worker answered.
       MEMORY_BACKEND: redis
       APP_ENV: production
-    # expose, NOT ports: reachable only from inside this compose network, i.e.
-    # only via Caddy. With `ports: 8000:8000` the app would also be served
-    # unencrypted on the VPS's public IP, bypassing TLS entirely.
     expose:
       - "8000"
     depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    # Gives an in-flight avatar turn a chance to finish on redeploy instead of
-    # being killed mid-sentence. Doesn't eliminate the disruption -- see the
-    # plan's "redeploys drop live connections" note -- just softens it.
     stop_grace_period: 30s
     healthcheck:
-      # python, not curl: the slim base image has no curl, and installing one
-      # purely for a healthcheck is a wasted layer. urlopen raises on non-200,
-      # which is exactly the non-zero exit the healthcheck needs.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
-      # Generous: the app imports logfire/langsmith/pinecone/openai at startup,
-      # which is noticeably slower than a bare FastAPI app.
       start_period: 30s
 
   redis:
     image: redis:7-alpine
-    # NO ports: mapping, on purpose. Redis ships with no authentication, and
-    # 6379 is among the most aggressively scanned ports on the internet --
-    # publishing it here would let anyone read, alter, or FLUSHALL every
-    # conversation. The api reaches it over the internal network instead.
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
     healthcheck:
@@ -82,20 +39,11 @@ services:
       - "80:80"    # also needed for Let's Encrypt's HTTP-01 challenge
       - "443:443"
     environment:
-      # Unset -> ":80", i.e. plain HTTP on localhost, for the local dress
-      # rehearsal. Set to a real hostname on the VPS and Caddy issues and
-      # renews the TLS certificate automatically. One file, both cases.
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Cert persistence. Without these, every restart re-issues certificates
-      # from scratch, which will hit Let's Encrypt's rate limit (5 per domain
-      # per week) surprisingly fast during a debugging session.
       - caddydata:/data
       - caddyconfig:/config
-    # service_started, not service_healthy: if the api is unhealthy you still
-    # want Caddy up so the failure surfaces as an HTTP error you can see,
-    # rather than as a proxy that never started at all.
     depends_on:
       - api
     restart: unless-stopped

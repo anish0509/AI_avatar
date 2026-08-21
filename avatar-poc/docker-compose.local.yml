@@ -1,0 +1,7 @@
+# Local deployment of the production stack; requires Compose 2.24.4+.
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:8087:80"
+    environment:
+      SITE_ADDRESS: ":80"

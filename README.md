@@ -81,3 +81,20 @@ Unit tests use local fakes and do not call paid services. The scripts named `che
 The PDF parser currently uses the deprecated `llama-cloud-services` SDK. Its migration is separate from the runtime fixes here; parsing should be verified with your account before ingesting a new corpus.
 
 See [HISTORY.md](HISTORY.md) for the reconstructed commit dates.
+
+## CI and local deployment
+
+GitHub Actions runs the Python tests, checks JavaScript syntax, then builds and smoke-tests the API/Redis/Caddy stack on pushes to `main` and pull requests. You can also run it from the Actions tab. No API secrets are needed for CI.
+
+For local deployment, install Docker with Compose 2.24.4 or newer and run from the repository root:
+
+```sh
+make deploy   # build, start, and wait for health checks
+make status
+make logs
+make stop     # stop containers; preserve Redis data
+```
+
+Open http://localhost:8087. The deployment creates `avatar-poc/.env` from the example if missing; add your API keys there and run `make deploy` again. Existing `.env` files are preserved. The local proxy binds only to localhost.
+
+Local delivery is manual: after pulling an update, run `make deploy`. GitHub Actions does not deploy to your laptop or require a self-hosted runner.

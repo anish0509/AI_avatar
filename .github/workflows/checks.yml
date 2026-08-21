@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            avatar-poc/requirements.lock
+            avatar-poc/requirements-dev.txt
+      - name: Install test dependencies
+        run: pip install -r avatar-poc/requirements-dev.txt
+      - name: Run tests
+        working-directory: avatar-poc
+        run: python -m pytest -q
+      - name: Check browser scripts
+        run: |
+          node --check avatar-poc/app/static/app.js
+          node --check avatar-poc/app/static/avatar.js
+          node --check avatar-poc/app/static/pcm-recorder-worklet.js
+      - name: Build and start local stack
+        run: make deploy
+      - name: Check HTTP routes through Caddy
+        run: |
+          curl --fail --retry 5 --retry-connrefused --retry-delay 1 http://localhost:8087/health
+          curl --fail --silent --output /dev/null http://localhost:8087/
+          curl --fail --silent --output /dev/null http://localhost:8087/static/avatar.html
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose -p ai-avatar-local -f avatar-poc/docker-compose.prod.yml -f avatar-poc/docker-compose.local.yml logs --tail=100
+      - name: Stop test containers
+        if: always()
+        run: make stop

@@ -16,3 +16,11 @@ def _pin_in_memory_conversation_store(monkeypatch):
     monkeypatch.setattr(mem.settings, "memory_backend", "memory")
     monkeypatch.setattr(mem, "_store", None)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _fake_api_key(monkeypatch):
+    """Speech transport tests replace network calls and need no real key."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "openai_api_key", "test-placeholder")
